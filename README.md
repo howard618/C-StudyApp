@@ -1,5 +1,5 @@
 # C-StudyApp
-
+![image alt](https://github.com/howard618/C-StudyApp/blob/3248f33f88b1a5b6d3c2c5f687a5b4251d509de9/studyapp.jpg)
 A locally hosted flashcard app for studying C# and .NET basics. The app includes concept flashcards plus coding-practice prompts so students can review interview topics from a browser or mobile device. This runs locally so I utilize a VPN set up on my local network so I can access the flascards while not on my LAN to avoid open ports. 
 
 ## Requirements
