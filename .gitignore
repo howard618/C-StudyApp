@@ -1,0 +1,16 @@
+bin/
+obj/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+.vs/
+.vscode/
+
+server.out.log
+server.err.log
+
+*.tmp
+*.temp

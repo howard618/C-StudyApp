@@ -1,0 +1,448 @@
+﻿@page "/"
+@inject FlashCardDeckService Deck
+@using System.Net
+@using System.Text
+
+@code {
+    private bool showResetConfirm;
+
+    private void OpenResetPrompt()
+    {
+        showResetConfirm = true;
+    }
+
+    private void ConfirmReset()
+    {
+        Deck.ResetDeckState();
+        showResetConfirm = false;
+    }
+
+    private void KeepCurrentFilters()
+    {
+        Deck.ClearStudyPile();
+        showResetConfirm = false;
+    }
+
+    private void SwitchToCodingMode()
+    {
+        Deck.ActivateCodingMode();
+    }
+
+    private void SwitchToConceptMode()
+    {
+        Deck.ActivateConceptMode();
+    }
+
+    private static MarkupString RenderHighlightedCode(string code)
+    {
+        var builder = new StringBuilder();
+        var keywords = new HashSet<string>
+        {
+            "public", "private", "static", "class", "return", "if", "else", "while", "for", "foreach",
+            "in", "new", "var", "int", "string", "char", "bool", "void", "true", "false", "null",
+            "using", "switch", "case", "throw", "is", "out"
+        };
+
+        for (var index = 0; index < code.Length;)
+        {
+            var current = code[index];
+
+            if (current == '/' && index + 1 < code.Length && code[index + 1] == '/')
+            {
+                var end = code.IndexOf('\n', index);
+                if (end == -1)
+                {
+                    end = code.Length;
+                }
+
+                AppendToken(builder, "comment", code[index..end]);
+                index = end;
+                continue;
+            }
+
+            if (current == '"')
+            {
+                var end = index + 1;
+                while (end < code.Length)
+                {
+                    if (code[end] == '"' && code[end - 1] != '\\')
+                    {
+                        end++;
+                        break;
+                    }
+
+                    end++;
+                }
+
+                AppendToken(builder, "string", code[index..end]);
+                index = end;
+                continue;
+            }
+
+            if (char.IsDigit(current))
+            {
+                var end = index + 1;
+                while (end < code.Length && char.IsDigit(code[end]))
+                {
+                    end++;
+                }
+
+                AppendToken(builder, "number", code[index..end]);
+                index = end;
+                continue;
+            }
+
+            if (char.IsLetter(current) || current == '_')
+            {
+                var end = index + 1;
+                while (end < code.Length && (char.IsLetterOrDigit(code[end]) || code[end] == '_'))
+                {
+                    end++;
+                }
+
+                var word = code[index..end];
+                if (keywords.Contains(word))
+                {
+                    AppendToken(builder, "keyword", word);
+                }
+                else if (end < code.Length && code[end] == '(')
+                {
+                    AppendToken(builder, "method", word);
+                }
+                else
+                {
+                    builder.Append(WebUtility.HtmlEncode(word));
+                }
+
+                index = end;
+                continue;
+            }
+
+            builder.Append(WebUtility.HtmlEncode(current.ToString()));
+            index++;
+        }
+
+        return new MarkupString(builder.ToString());
+    }
+
+    private static void AppendToken(StringBuilder builder, string token, string text)
+    {
+        builder.Append("<span class=\"code-token code-");
+        builder.Append(token);
+        builder.Append("\">");
+        builder.Append(WebUtility.HtmlEncode(text));
+        builder.Append("</span>");
+    }
+}
+
+<PageTitle>C# Flashcards</PageTitle>
+
+<div class="dashboard">
+    <section class="hero-card">
+        <div>
+            <p class="eyebrow">Local Wi-Fi deck</p>
+            <h1>@(Deck.IsCodingMode ? "Coding Practice" : "C# Interview Flashcards")</h1>
+            <p class="subtitle">@(Deck.IsCodingMode ? "Practice coding interview prompts with a flip-card explanation, pattern, and why-it-works breakdown." : "Tap the card to flip it over and reveal the answer. Use the controls to move through the deck.")</p>
+        </div>
+        <div class="summary-chip">@(Deck.IsCodingMode ? Deck.CodingProgress : Deck.Progress)</div>
+    </section>
+
+    <section class="mode-switch-panel">
+        <div class="mode-switch-header">
+            <div>
+                <h3>Study mode</h3>
+                <p>Keep the concept deck and the coding practice deck separate.</p>
+            </div>
+        </div>
+        <div class="mode-switch-actions">
+            <button class="control-button @(Deck.IsCodingMode ? "secondary" : "primary")" @onclick="SwitchToConceptMode">Concept flashcards</button>
+            <button class="control-button @(Deck.IsCodingMode ? "primary" : "secondary")" @onclick="SwitchToCodingMode">Coding practice</button>
+        </div>
+    </section>
+
+    <section class="card-stage">
+        <div class="flashcard @((Deck.IsFlipped ? "flipped" : string.Empty)) @(Deck.IsCodingMode ? "coding-card" : string.Empty)" @onclick="Deck.ToggleFlip">
+            @if (!Deck.IsCodingMode)
+            {
+                <div class="card-face front">
+                    <div class="card-topline">
+                        <span class="topic-pill">@Deck.CurrentTopicBadge</span>
+                        <span class="status-pill">Question</span>
+                    </div>
+                    <p class="card-label">Question</p>
+                    <h2>@Deck.CurrentCard.Question</h2>
+                    <p class="tap-hint">Tap to reveal the answer</p>
+                </div>
+
+                <div class="card-face back">
+                    <div class="card-topline">
+                        <span class="topic-pill">@Deck.CurrentTopicBadge</span>
+                        <span class="status-pill alt">Answer</span>
+                    </div>
+                    <p class="card-label">Answer</p>
+                    <p class="answer-text">@Deck.CurrentCard.Answer</p>
+                    <p class="tap-hint">Tap again to return to the question</p>
+                </div>
+            }
+            else
+            {
+                <div class="card-face front coding-front">
+                    <div class="card-topline">
+                        <span class="topic-pill">@Deck.CurrentCodingCard.Topic</span>
+                        <span class="status-pill">Coding prompt</span>
+                    </div>
+                    <p class="card-label">Prompt</p>
+                    <h2>@Deck.CurrentCodingCard.Prompt</h2>
+                    <p class="tap-hint">Tap to reveal the worked solution, pattern, and why it applies.</p>
+                </div>
+
+                <div class="card-face back coding-back">
+                    <div class="card-topline">
+                        <span class="topic-pill">@Deck.CurrentCodingCard.Topic</span>
+                        <span class="status-pill alt">Worked solution</span>
+                    </div>
+                    <p class="card-label">Compact summary</p>
+                    <p class="answer-text">@Deck.CurrentCodingCard.ShortSummary</p>
+                    <p class="card-label">Implementation</p>
+                    <pre class="code-block" @onclick:stopPropagation="true">@RenderHighlightedCode(Deck.CurrentCodingCard.Implementation)</pre>
+                    <p class="card-label">Pattern</p>
+                    <p class="tip-text">@Deck.GetCodingPatternLabel(Deck.CurrentCodingCard)</p>
+                    <p class="card-label">Why it applies</p>
+                    <p class="tip-text">@Deck.CurrentCodingCard.WhyItWorks</p>
+                    <p class="tap-hint">Tap again to return to the prompt.</p>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="controls">
+        @if (!Deck.IsCodingMode)
+        {
+            <button class="control-button secondary" @onclick="Deck.PreviousCard">← Previous</button>
+            <button class="control-button secondary" @onclick="Deck.ToggleFlip">Flip card</button>
+            <button class="control-button warning" @onclick="Deck.MarkCurrentCardAsUnknown">I don't know the answer</button>
+            <button class="control-button primary" @onclick="Deck.NextCard">Next →</button>
+        }
+        else
+        {
+            <button class="control-button secondary" @onclick="Deck.PreviousCodingCard">← Previous prompt</button>
+            <button class="control-button secondary" @onclick="Deck.ToggleFlip">Flip card</button>
+            <button class="control-button warning" @onclick="Deck.MarkCurrentCodingCardAsUnknown">I don't know the answer</button>
+            <button class="control-button primary" @onclick="Deck.NextCodingCard">Next prompt →</button>
+        }
+    </section>
+
+    <section class="topic-panel">
+        <div class="topic-panel-header">
+            <div>
+                <h3>Focus the deck</h3>
+                <p>@(Deck.IsCodingMode ? "Choose a coding topic to narrow the practice session." : "Choose a topic to narrow the session, then shuffle either the whole deck or just the selected topic.")</p>
+            </div>
+            <div class="focus-badge">@(Deck.IsCodingMode ? Deck.SelectedCodingTopic : Deck.SelectedTopic)</div>
+        </div>
+
+        <div class="topic-chip-row">
+            @if (!Deck.IsCodingMode)
+            {
+                @foreach (var topic in Deck.Topics)
+                {
+                    <button class="topic-chip @(Deck.SelectedTopic == topic ? "active" : string.Empty)" @onclick="() => Deck.SelectTopic(topic)">
+                        @topic
+                    </button>
+                }
+            }
+            else
+            {
+                @foreach (var topic in Deck.CodingTopics)
+                {
+                    <button class="topic-chip @(Deck.SelectedCodingTopic == topic ? "active" : string.Empty)" @onclick="() => Deck.SelectCodingTopic(topic)">
+                        @topic
+                    </button>
+                }
+            }
+        </div>
+    </section>
+
+    @if (Deck.IsCodingMode && Deck.CurrentCodingPatternGuide is not null)
+    {
+        var patternGuide = Deck.CurrentCodingPatternGuide;
+
+        <section class="pattern-panel">
+            <div class="pattern-panel-header">
+                <div>
+                    <h3>Patterns</h3>
+                    <p>Study how to recognize the approach, then practice the prompts that use it.</p>
+                </div>
+                <div class="focus-badge">@patternGuide.Problems.Count problem(s)</div>
+            </div>
+
+            <div class="topic-chip-row">
+                @foreach (var pattern in Deck.CodingPatternGuides)
+                {
+                    <button class="topic-chip @(Deck.SelectedCodingPattern == pattern.Name ? "active" : string.Empty)" @onclick="() => Deck.SelectCodingPattern(pattern.Name)">
+                        @pattern.Name
+                    </button>
+                }
+            </div>
+
+            <div class="pattern-detail">
+                <div class="pattern-main">
+                    <p class="card-label">Pattern</p>
+                    <h3>@patternGuide.Name</h3>
+                    <p>@patternGuide.Explanation</p>
+
+                    <p class="card-label">How to identify it</p>
+                    <p>@patternGuide.HowToIdentify</p>
+
+                    <p class="card-label">How to say it in an interview</p>
+                    <p class="interview-line">@patternGuide.InterviewLanguage</p>
+
+                    <button class="control-button primary" @onclick="Deck.PracticeSelectedCodingPattern">Practice this pattern</button>
+                </div>
+
+                <div class="pattern-problems">
+                    <p class="card-label">Related prompts</p>
+                    <ul class="pattern-problem-list">
+                        @foreach (var problem in patternGuide.Problems.Take(8))
+                        {
+                            <li>
+                                <strong>@problem.Prompt</strong>
+                                <span>@problem.Topic</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </section>
+    }
+
+    <section class="shuffle-panel">
+        <div class="shuffle-panel-header">
+            <div>
+                <h3>Study order</h3>
+                <p>@(Deck.IsCodingMode ? "Randomize the current coding focus or reset back to all prompts." : "Randomize the current focus or reset back to the full deck.")</p>
+            </div>
+            <span class="status-pill">@(Deck.IsCodingMode ? Deck.CodingOrderSummary : Deck.OrderSummary)</span>
+        </div>
+        <div class="shuffle-actions">
+            @if (!Deck.IsCodingMode)
+            {
+                <button class="control-button primary" @onclick="Deck.ShuffleAllCards">Shuffle all cards</button>
+                <button class="control-button secondary" @onclick="Deck.ShuffleSelectedTopic" disabled="@(Deck.SelectedTopic == "All cards")">Shuffle selected topic</button>
+            }
+            else
+            {
+                <button class="control-button primary" @onclick="Deck.ShuffleAllCodingCards">Shuffle all prompts</button>
+                <button class="control-button secondary" @onclick="Deck.ShuffleSelectedCodingTopic" disabled="@(Deck.SelectedCodingTopic == "All prompts")">Shuffle selected topic</button>
+            }
+        </div>
+    </section>
+
+    @if (!Deck.IsCodingMode && Deck.StudyPileCount > 0)
+    {
+        <section class="study-panel">
+            <div class="study-panel-header">
+                <div>
+                    <h3>Study pile</h3>
+                    <p>@Deck.StudyPileCount card(s) saved for review. Use practice mode to revisit the ones you missed.</p>
+                </div>
+                <div class="study-actions">
+                    @if (Deck.IsReviewingStudyPile)
+                    {
+                        <button class="control-button secondary" @onclick="Deck.ReturnToDeck">Back to deck</button>
+                    }
+                    else
+                    {
+                        <button class="control-button secondary" @onclick="Deck.StartStudyReview">Practice missed cards</button>
+                    }
+                    <button class="control-button warning" @onclick="OpenResetPrompt">Start from scratch</button>
+                </div>
+            </div>
+            <ul class="study-list">
+                @foreach (var studyCard in Deck.StudyPile.Take(8))
+                {
+                    <li class="study-list-item">
+                        <strong>@studyCard.Question</strong>
+                        <span>@Deck.GetTopicLabel(studyCard)</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (Deck.IsCodingMode && Deck.CodingStudyPileCount > 0)
+    {
+        <section class="study-panel">
+            <div class="study-panel-header">
+                <div>
+                    <h3>Study pile</h3>
+                    <p>@Deck.CodingStudyPileCount prompt(s) saved for review. Practice the coding prompts you missed.</p>
+                </div>
+                <div class="study-actions">
+                    @if (Deck.IsReviewingCodingStudyPile)
+                    {
+                        <button class="control-button secondary" @onclick="Deck.ReturnToCodingDeck">Back to coding deck</button>
+                    }
+                    else
+                    {
+                        <button class="control-button secondary" @onclick="Deck.StartCodingStudyReview">Practice missed prompts</button>
+                    }
+                    <button class="control-button warning" @onclick="Deck.ClearCodingStudyPile">Clear coding pile</button>
+                </div>
+            </div>
+            <ul class="study-list">
+                @foreach (var studyCard in Deck.CodingStudyPile.Take(8))
+                {
+                    <li class="study-list-item">
+                        <strong>@studyCard.Prompt</strong>
+                        <span>@studyCard.Topic</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (showResetConfirm)
+    {
+        <section class="reset-modal-backdrop" @onclick="KeepCurrentFilters">
+            <div class="reset-modal" @onclick:stopPropagation="true">
+                <div class="reset-modal-header">
+                    <div>
+                        <p class="eyebrow">Reset options</p>
+                        <h3>Reset study pile and focus?</h3>
+                    </div>
+                </div>
+                <p>Clearing now will discard missed cards. Choose yes to reset the deck to all cards, or no to keep the current topic focus and just clear the study pile.</p>
+                <div class="reset-modal-actions">
+                    <button class="control-button warning" @onclick="ConfirmReset">Yes, reset everything</button>
+                    <button class="control-button secondary" @onclick="KeepCurrentFilters">No, keep filters</button>
+                </div>
+            </div>
+        </section>
+    }
+
+    <section class="meta-panel">
+        <div>
+            <h3>Deck notes</h3>
+            <p>@(Deck.IsCodingMode ? "Coding prompts are pulled from the uploaded file and displayed with compact summaries, full C# implementations, pattern notes, and why-the-pattern-works explanations." : "This starter set covers common .NET and C# concepts. If you want to swap in your document questions, replace the seeded cards in <strong>Data/FlashCardDeckService.cs</strong>.")</p>
+        </div>
+        <div class="meta-grid">
+            <div class="meta-box">
+                <span class="meta-label">Current card</span>
+                <strong>@(Deck.IsCodingMode ? $"#{Deck.CodingProgress}" : $"#{Deck.CurrentIndex}")</strong>
+            </div>
+            <div class="meta-box">
+                <span class="meta-label">Cards</span>
+                <strong>@(Deck.IsCodingMode ? Deck.CodingCardCount : Deck.TotalCards)</strong>
+            </div>
+            <div class="meta-box">
+                <span class="meta-label">Focus</span>
+                <strong>@(Deck.IsCodingMode ? Deck.SelectedCodingTopic : Deck.SelectedTopic)</strong>
+            </div>
+            <div class="meta-box">
+                <span class="meta-label">Mode</span>
+                <strong>@(Deck.IsCodingMode ? Deck.CodingStudyModeLabel : Deck.StudyModeLabel)</strong>
+            </div>
+        </div>
+    </section>
+</div>
