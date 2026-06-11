@@ -1,6 +1,6 @@
-# FlashCards
+# C-StudyApp
 
-A local C# and .NET flashcard study guide built with Blazor Server. The app includes concept flashcards plus coding-practice prompts so students can review interview topics from a browser.
+A locally hosted flashcard app for studying C# and .NET basics. The app includes concept flashcards plus coding-practice prompts so students can review interview topics from a browser.
 
 ## Requirements
 
@@ -14,8 +14,8 @@ https://dotnet.microsoft.com/download/dotnet/8.0
 ## Clone And Run
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/FlashCards.git
-cd FlashCards
+git clone https://github.com/howard618/C-StudyApp.git
+cd C-StudyApp
 dotnet run
 ```
 
